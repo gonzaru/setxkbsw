@@ -6,6 +6,7 @@ CC=${CC:-cc}
 : "${CFLAGS:=}"
 CFLAGS="$CFLAGS -Wno-implicit-function-declaration -Wno-int-conversion"
 SETXKBSW_VERSION=$(git rev-parse --short HEAD 2>/dev/null || echo dev)
+# shellcheck disable=SC2089
 CFLAGS="$CFLAGS -DSETXKBSW_VERSION=\"${SETXKBSW_VERSION}\""
 
 if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists x11 xkbfile
@@ -18,5 +19,6 @@ else
 fi
 
 mkdir -p bin
+# shellcheck disable=SC2086,SC2090
 "$CC" $CFLAGS -o bin/setxkbsw setxkbsw.c $LIBS
 strip bin/setxkbsw
