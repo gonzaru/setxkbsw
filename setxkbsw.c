@@ -62,7 +62,6 @@ void panic(const char *fmt, ...) {
 
 int getidx(const char *group, int max) {
   XkbRF_VarDefsRec vd;
-  char *layout;
   char *save;
   char *pt;
   int i;
@@ -71,16 +70,21 @@ int getidx(const char *group, int max) {
     panic("Error: cannot get keyboard properties\n");
   }
   save = NULL;
-  layout = vd.layout;
-  pt = strtok_r(layout, ",", &save);
+  pt = strtok_r(vd.layout, ",", &save);
   for (i = 0; i < max && pt; i++) {
     if (strcmp(pt, group) == 0) {
-        XFree(layout);
-        return i;
+      XFree(vd.layout);
+      XFree(vd.model);
+      XFree(vd.variant);
+      XFree(vd.options);
+      return i;
     }
     pt = strtok_r(NULL, ",", &save);
   }
-  XFree(layout);
+  XFree(vd.layout);
+  XFree(vd.model);
+  XFree(vd.variant);
+  XFree(vd.options);
   return -1;
 }
 
@@ -98,10 +102,9 @@ char *getname(int idx, char *groups) {
 }
 
 int listgroups(int more) {
-  XkbDescPtr desc;
+  XkbDescPtr desc = NULL;
   XkbRF_VarDefsRec vd;
   XkbStateRec state;
-  char *layout;
   char *save;
   char *longname;
   char *pt;
@@ -120,9 +123,11 @@ int listgroups(int more) {
     printf("%-8s %-8s %-12s %s\n", "current", "index", "name", "description");
   }
   save = NULL;
-  layout = vd.layout;
   pt = strtok_r(vd.layout, ",", &save);
   for (idx = 0; pt; idx++) {
+    if (more && idx >= XkbNumKbdGroups) {
+      break;
+    }
     if (more) {
       if (!(longname = XGetAtomName(dpy, desc->names->groups[idx]))) {
         panic("Error: cannot get name description\n");
@@ -134,12 +139,18 @@ int listgroups(int more) {
     }
     pt = strtok_r(NULL, ",", &save);
   }
-  XFree(layout);
+  if (desc) {
+    XkbFreeKeyboard(desc, 0, True);
+  }
+  XFree(vd.layout);
+  XFree(vd.model);
+  XFree(vd.variant);
+  XFree(vd.options);
   return 1;
 }
 
 int getgroup(int more) {
-  XkbDescPtr desc;
+  XkbDescPtr desc = NULL;
   XkbRF_VarDefsRec vd;
   XkbStateRec state;
   char *longname;
@@ -167,8 +178,14 @@ int getgroup(int more) {
   } else {
     printf("%s\n", name);
   }
+  if (desc) {
+    XkbFreeKeyboard(desc, 0, True);
+  }
   free(name);
   XFree(vd.layout);
+  XFree(vd.model);
+  XFree(vd.variant);
+  XFree(vd.options);
   return 1;
 }
 
@@ -176,6 +193,7 @@ int setgroup(const char *strgroup) {
   XkbDescPtr desc;
   int idx;
   int numgroup;
+  int ret;
 
   if (!(desc = XkbGetKeyboard(dpy, XkbAllComponentsMask, XkbUseCoreKbd))) {
     panic("Error: cannot get keyboard description\n");
@@ -185,22 +203,31 @@ int setgroup(const char *strgroup) {
   }
   numgroup = atoi(strgroup);
   if (strgroup[0] == '0' || numgroup) {
+    if (numgroup < 0) {
+      XkbFreeKeyboard(desc, 0, True);
+      panic("Error: group index '%d' is out of range\n", numgroup);
+    }
     idx = numgroup;
     if (numgroup >= desc->ctrls->num_groups) {
+      XkbFreeKeyboard(desc, 0, True);
       panic("Error: group index '%d' is out of range\n", numgroup);
     }
   } else {
     if ((idx = getidx(strgroup, desc->ctrls->num_groups)) == -1) {
+      XkbFreeKeyboard(desc, 0, True);
       panic("Error: group '%s' was not found\n", strgroup);
     }
   }
-  return XkbLockGroup(dpy, XkbUseCoreKbd, idx);
+  ret = XkbLockGroup(dpy, XkbUseCoreKbd, idx);
+  XkbFreeKeyboard(desc, 0, True);
+  return ret;
 }
 
 int togglegroup() {
   XkbDescPtr desc;
   XkbStateRec state;
   int idx;
+  int ret;
 
   if (XkbGetState(dpy, XkbUseCoreKbd, &state) != Success) {
     panic("Error: cannot get state\n");
@@ -212,7 +239,9 @@ int togglegroup() {
     panic("Error: cannot get keyboard controls\n");
   }
   idx = (state.group + 1 >= desc->ctrls->num_groups) ? 0 : state.group + 1;
-  return XkbLockGroup(dpy, XkbUseCoreKbd, idx);
+  ret = XkbLockGroup(dpy, XkbUseCoreKbd, idx);
+  XkbFreeKeyboard(desc, 0, True);
+  return ret;
 }
 
 int main(int argc, char *argv[]) {
