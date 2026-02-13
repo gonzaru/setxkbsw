@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 #include <stdarg.h>
 #include <unistd.h>
 #include <X11/XKBlib.h>
@@ -192,6 +191,7 @@ int getgroup(int more) {
 int setgroup(const char *strgroup) {
   XkbDescPtr desc;
   int idx;
+  int isnum;
   int numgroup;
   int ret;
 
@@ -201,17 +201,14 @@ int setgroup(const char *strgroup) {
   if (XkbGetControls(dpy, XkbAllComponentsMask, desc) != Success || !desc->ctrls) {
     panic("Error: cannot get keyboard controls\n");
   }
-  numgroup = atoi(strgroup);
-  if (strgroup[0] == '0' || numgroup) {
-    if (numgroup < 0) {
+  isnum = strgroup[0] != '\0' && strspn(strgroup, "0123456789") == strlen(strgroup);
+  if (isnum) {
+    numgroup = atoi(strgroup);
+    if (numgroup < 0 || numgroup >= desc->ctrls->num_groups) {
       XkbFreeKeyboard(desc, 0, True);
       panic("Error: group index '%d' is out of range\n", numgroup);
     }
     idx = numgroup;
-    if (numgroup >= desc->ctrls->num_groups) {
-      XkbFreeKeyboard(desc, 0, True);
-      panic("Error: group index '%d' is out of range\n", numgroup);
-    }
   } else {
     if ((idx = getidx(strgroup, desc->ctrls->num_groups)) == -1) {
       XkbFreeKeyboard(desc, 0, True);
